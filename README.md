@@ -1,0 +1,2 @@
+# Matching-3D-Models
+In oral and maxillofacial surgery, there is the situation that the lower jaw, the mandible, is partially destroyed, e.g. by tumor or accident, and must be replaced. For this purpose, a piece of bone is taken from the iliac crest. The question now is, which piece is best suited. In addition to the many medical constraints (trauma, vascularization, muscle insertion, access, etc.), one aspect is of great importance: the accuracy of fit. So find the best piece on the iliac crest to replace the mandibular piece. 
