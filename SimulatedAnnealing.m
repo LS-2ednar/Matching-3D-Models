@@ -51,7 +51,7 @@ rejected = [0, 0, 0, 0, 0, 0];
 
 %%
 % Use hausdorff distance of the inital positions as initial best value
-distance_best = euclideandist(mand, pelvis);
+distance_best = hausdorff_distance(mand, pelvis);
 %%
 % Calculate boundaries for the solution space
 x_max = max(pelvis(:,1));
@@ -116,7 +116,7 @@ while distance_best > 10^(-2)
 
             % calculated the (modified) hausdorff distance for the transformed
             % mand matrix 
-            distance_current = euclideandist(mand_current, pelvis);
+            distance_current = hausdorff_distance(mand_current, pelvis);
             difference = distance_current - distance_best;
 
             % if the new distance is smaller than the last distance accept the
