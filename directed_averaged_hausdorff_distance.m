@@ -1,4 +1,4 @@
-function [dhd] = directed_hausdorff_distance(X,Y)
+function [dahd] = directed_averaged_hausdorff_distance(X,Y)
 %Calculates the directed hausdorff distance for X to Y
 %   If the directed Hausdorff distance is zero all points of X lie on a
 %   point in Y, the converse might not be true
@@ -22,6 +22,6 @@ for i=1:dimX(1)
     end
     dXY_all(i) = shortestdist;
 end
-dhd = max(dXY_all);
+dahd = sum(dXY_all)/dimX(1);
 end
 
