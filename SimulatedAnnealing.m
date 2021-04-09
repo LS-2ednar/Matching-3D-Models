@@ -42,7 +42,7 @@ yt = 0;
 zt = 0;
 
 parameters_best = [alpha, beta, gamma, xt, yt, zt];
-parameters_current = parameters_best;
+parameters_current = parameters_current;
 
 % Create matrix to remember rejected solutions to get a shorter running
 % time, since the calculation of the (modified) hausdorff distance is 
