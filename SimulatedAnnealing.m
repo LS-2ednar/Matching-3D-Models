@@ -137,15 +137,14 @@ while distance_best > 10^(-2)
             %rejected = [rejected; parameters_current];
             
         end
-        
-        if parameters_current == parameters_best
-            plot3(mand_current(:,1),mand_current(:,2),mand_current(:,3),'.')
-            T
-            distance_best
-            parameters_best
-            parameters_current
-            drawnow
-        end
+
+        plot3(mand_current(:,1),mand_current(:,2),mand_current(:,3),'.')
+        T
+        distance_best
+        parameters_best
+        parameters_current
+        drawnow
+       
     end
 end
 
