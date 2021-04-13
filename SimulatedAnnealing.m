@@ -47,11 +47,13 @@ parameters_current = parameters_best;
 % Create matrix to remember rejected solutions to get a shorter running
 % time, since the calculation of the (modified) hausdorff distance is 
 % relatively time consuming and add the inital parameters 
-rejected = [0, 0, 0, 0, 0, 0];
+rejected = parameters_current;
 
 %%
 % Use hausdorff distance of the inital positions as initial best value
+tic
 distance_best = directed_averaged_hausdorff_distance(mand, pelvis);
+toc
 %%
 % Calculate boundaries for the solution space
 x_max = max(pelvis(:,1));
@@ -64,13 +66,13 @@ z_min = min(pelvis(:,3));
 % Set starting temperature for the outer loop, the max stepsize and the max
 % rotation
 startT = 50;
-maxStep = 10;
+maxStep = 5;
 maxRotation = 1;
 
 while distance_best > 10^(-2)
     for T=startT:-1:1
 
-        for v=1:10
+        for v=1:5
             % randomly update parameters for rotation
             parameters_current(1) = parameters_best(1) + (rand-0.5)*2*maxRotation*T/startT;
             parameters_current(2) = parameters_best(2) + (rand-0.5)*2*maxRotation*T/startT;
@@ -89,9 +91,9 @@ while distance_best > 10^(-2)
             
             % update the parameters as long as we are not in the solution space
             % or are already in the rejected parameters
-            while (max(mand_current(:,1)) >= x_max || min(mand_current(:,1)) <= x_min || ...
-                   max(mand_current(:,2)) >= y_max || min(mand_current(:,2)) <= y_min || ...
-                   max(mand_current(:,3)) >= z_max || min(mand_current(:,3)) <= z_min || ...
+            while (max(mand_current(:,1)) > x_max+5 || min(mand_current(:,1)) < x_min-5 || ...
+                   max(mand_current(:,2)) > y_max+5 || min(mand_current(:,2)) < y_min-5 || ...
+                   max(mand_current(:,3)) > z_max+5 || min(mand_current(:,3)) < z_min-5 || ...
                    tf)
 
             % record rejected parameters
@@ -111,7 +113,7 @@ while distance_best > 10^(-2)
             mand_current = transformation(parameters_current, mand);
             
             % check if parameters were already rejected 
-            tf = ismember(parameters_current, rejected, 'rows');
+            %tf = ismember(parameters_current, rejected, 'rows');
             end
 
             % calculated the (modified) hausdorff distance for the transformed
@@ -127,17 +129,22 @@ while distance_best > 10^(-2)
 
             % else if the new distance is not smaller than the last distance
             % accept the solution with a random probability
-            elseif (exp((-difference*30)/T) > rand)
+            elseif (exp((-difference*50)/T) > rand)
+                p = exp((-difference*50)/T)
                 parameters_best = parameters_current;
                 distance_best = distance_current;
-            else
-                rejected = [rejected; parameters_current];
             end
+            %rejected = [rejected; parameters_current];
             
         end
+
         plot3(mand_current(:,1),mand_current(:,2),mand_current(:,3),'.')
+        T
         distance_best
+        parameters_best
+        parameters_current
         drawnow
+       
     end
 end
 
