@@ -22,6 +22,6 @@ for i=1:step:dimX(1)
     end
     dXY_all(i) = shortestdist;
 end
-dahd = sum(dXY_all)/dimX(1);
+dahd = sum(dXY_all)/(dimX(1)/step);
 end
 
