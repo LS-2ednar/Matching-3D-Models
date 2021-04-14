@@ -1,6 +1,6 @@
 %% -------- SETUP: Load Data & Create and Visualize Point Clouds ---------
 clear;clc;close all;
-
+tic
 % reading stl files
 stlData = stlread('Mand-left-cut.stl');
 mand = stlData.Points;
@@ -49,7 +49,7 @@ MaxRot_F = 2*pi;         % maximum value for rotation parameters
 MinTrans_F = -10;        % minimum value for translation parameters
 MaxTrans_F = 10;         % maximum value for translation parameters
 iter_F = 50;             % number of iterations
-nPop_F = 10;             % Population Size (Swarm Size)
+nPop_F = 5;              % Population Size (Swarm Size)
 wdamp_F = 0.98;          % damping coefficient
 c1_F = 1.1;              % personal acceleration coefficent
 c2_F = 1.1;              % social acceleration coefficient
@@ -67,6 +67,7 @@ MandFine = repmat(mandible, restarts,1);
 
 for i=1:5
     
+    % quick alignment
     [mand_quick, distances_quick] = ParticleSwarmOpti(MinRot_Q, MaxRot_Q, MinTrans_Q, ...
         MaxTrans_Q, iter_Q, nPop_Q, wdamp_Q, c1_Q, c2_Q, mand, pelvis, stepsize_Q);
     
@@ -88,6 +89,7 @@ for i=1:5
     title('Best Transformations for Quick Alignment')
     drawnow
     
+    % fine alignment
     [mand_fine, distances_fine] = ParticleSwarmOpti(MinRot_F, MaxRot_F, MinTrans_F, ...
         MaxTrans_F, iter_F, nPop_F, wdamp_F, c1_F, c2_F, mand_quick, pelvis, stepsize_F);
     
@@ -111,11 +113,16 @@ for i=1:5
 
 end
 hold off
-
+toc
 %% ------------------------------ FUNCTIONS ------------------------------
 
 function [X] = move(X,Y)
-%moves the first point set X to the center of gravity of the second point set
+% moves the first point set X to the center of gravity of the second point set
+% INPUT
+% X: point set
+% Y: point set
+% OUTPUT:
+% X: moved point set X
 
 dimX = size(X);
 dimY = size(Y);
@@ -124,8 +131,7 @@ if dimX(2) ~= dimY(2)
     fprintf('All points must have the same dimension')
 end
 
-
-%calculate the center of gravity for both point sets
+% calculate the center of gravity for both point sets
 center_of_gravity_X = zeros(1,dimX(2));
 center_of_gravity_Y = zeros(1,dimY(2));
 
@@ -136,8 +142,10 @@ for i=1:dimX(2)
     center_of_gravity_Y(i) = y;
 end
 
+% calculate the distance between the two centers of gravity
 dist_vector = abs(center_of_gravity_X - center_of_gravity_Y);
 
+% move the first point set
 for i=1:dimX(2)
     X(:,i) = X(:,i) + dist_vector(i);
 end
@@ -145,14 +153,31 @@ end
 end
 
 function [X_new] = transformation(parameters, X)
-%Transforms a point cloud in 3D
+% Transforms a 3D point set
+% INPUT:
+% parameters: a 1x6 vector with entries corresponding to the rotation and
+%             translation values
+% X:          a 3D point set
+% OUTPUT:
+% X_new:      the transformed 3D point set
 
-alpha = parameters(1); 
-beta = parameters(2);
-gamma = parameters(3);
-xt = parameters(4);
-yt = parameters(5);
-zt = parameters(6);
+dimX = size(X);
+dim_p = size(parameters);
+
+if dimX(2) ~= 3
+    fprintf('Input has to be a 3D point set')
+end
+
+if dim_p(2) ~= 6
+    fprint('Function needs one parameter vector with 6 entries')
+end
+
+alpha = parameters(1);  % rotation around the x-axis
+beta = parameters(2);   % rotation around the y-axis
+gamma = parameters(3);  % rotation around the z-axis
+xt = parameters(4);     % translation along the x-axis 
+yt = parameters(5);     % translation along the y-axis
+zt = parameters(6);     % translation along the z-axis
 
 r11 = cos(alpha)*cos(beta);
 r12 = cos(alpha)*sin(beta)*sin(gamma)-sin(alpha)*cos(gamma);
@@ -174,6 +199,7 @@ r42 = 0;
 r43 = 0;
 r44 = 1;
 
+% rigid transformation matrix
 T = [r11, r12, r13, r14;...
     r21, r22, r23, r24;...
     r31, r32, r33, r34;...
@@ -184,6 +210,45 @@ X_ext = horzcat(X, extension);
 X_new_ext = T*X_ext';
 X_new = X_new_ext(1:3,:)';
 end
+
+function [dahd] = directed_averaged_hausdorff_distance(X,Y, step)
+% Calculates the directed hausdorff distance from X to Y 
+% If the directed averaged Hausdorff distance is zero all points of X lie on a
+% point in Y, this can only happen if X <= Y.
+
+% INPUT:
+% X: a 3D point set
+% Y: a 3D point set 
+% OUTPUT:
+% dahd: the directed averaged hausdorff distance from X to Y
+
+dimX = size(X);
+dimY = size(Y);
+%check if the two sets have the same dimension
+if dimX(2) ~= dimY(2)
+    fprintf('All points must have the same dimension')
+end
+
+if dimX(1) > dimY(1)
+    fprint('The first input point set is larger than the second one - hausdorff distance cannot reach zero')
+end
+
+%calculate the directed distance from X to Y
+dXY_all = zeros(1, dimX(1));
+for i=1:step:dimX(1)
+    shortestdist = norm(X(i,:) - Y(1,:));
+    for j=2:step:dimY(1)
+        dist = norm(X(i,:) - Y(j,:));
+        if dist < shortestdist
+            shortestdist = dist;
+        end
+    end
+    dXY_all(i) = shortestdist;
+end
+% average the distance over all points
+dahd = sum(dXY_all)/(dimX(1)/step);
+end
+
 
 function [ObjectMoveNew, BestDistances] = ParticleSwarmOpti(MinRotation, MaxRotation,...
     MinTranslation, MaxTranslation, iter, nPopulation, wdamp, personalacceleration, socialacceleration, ObjectMove, ObjectFixed, stepsize)
@@ -254,7 +319,7 @@ for i=1:nPopulation
 
 end
 
-% hold best global difference value for each iteration
+% hold best global distance value for each iteration
 BestDistances = zeros(iter, 1);
 
 for it=1:iter
@@ -283,6 +348,7 @@ for it=1:iter
     end
     BestDistances(it) = GlobalBest.Distance;
     w = w*wdamp;
+    disp(['Iteration ' num2str(it) ': Best Distance = ' num2str(BestDistances(it))]);
     
 end
 ObjectMoveNew = transformation(GlobalBest.Transformation, ObjectMove);
