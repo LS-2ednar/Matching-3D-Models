@@ -45,15 +45,15 @@ stepsize_Q = 10;         % stepsize for the hausdorff distance
 
 % Fine Alignment Parameters
 MinRot_F = 0;            % minimum value for rotation parameters 
-MaxRot_F = 2*pi;         % maximum value for rotation parameters
+MaxRot_F = 0;            % maximum value for rotation parameters
 MinTrans_F = -10;        % minimum value for translation parameters
 MaxTrans_F = 10;         % maximum value for translation parameters
-iter_F = 50;             % number of iterations
-nPop_F = 5;              % Population Size (Swarm Size)
+iter_F = 10;             % number of iterations
+nPop_F = 20;             % Population Size (Swarm Size)
 wdamp_F = 0.98;          % damping coefficient
 c1_F = 1.1;              % personal acceleration coefficent
 c2_F = 1.1;              % social acceleration coefficient
-stepsize_F = 5;          % stepsize for the hausdorff distance
+stepsize_F = 2;          % stepsize for the hausdorff distance
 
 restarts = 5;            % number of restarts
 
@@ -88,10 +88,21 @@ for i=1:5
     plot3(pelvis(:,1),pelvis(:,2),pelvis(:,3),'.');
     title('Best Transformations for Quick Alignment')
     drawnow
+   
+    % fine alignment 
+    xmin = min(mand_quick(:,1))-10;
+    xmax = max(mand_quick(:,1))+10;
+    ymin = min(mand_quick(:,2))-10;
+    ymax = max(mand_quick(:,2))+10;
+    zmin = min(mand_quick(:,3))-10;
+    zmax = max(mand_quick(:,3))+10;
     
-    % fine alignment
+    pelvis_small = pelvis(pelvis(:,1) > xmin & pelvis(:,1) < xmax & ...
+        pelvis(:,2) > ymin & pelvis(:,2) < ymax & ...
+        pelvis(:,3) > zmin & pelvis(:,3) < zmax, :);
+    
     [mand_fine, distances_fine] = ParticleSwarmOpti(MinRot_F, MaxRot_F, MinTrans_F, ...
-        MaxTrans_F, iter_F, nPop_F, wdamp_F, c1_F, c2_F, mand_quick, pelvis, stepsize_F);
+        MaxTrans_F, iter_F, nPop_F, wdamp_F, c1_F, c2_F, mand_quick, pelvis_small, stepsize_F);
     
     MandFine(i).Points = mand_fine;
     MandFine(i).Distance = min(distances_fine);
