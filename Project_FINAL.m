@@ -1,5 +1,19 @@
 clear;clc;close all;
 rng(128);
+%% ---------------------------- ATTENTION --------------------------------
+%{
+The total runtime of the script for both algorithms is about 125min 
+(for 5 restarts). The average runtime of the simulated annealing algorithm 
+is 24min (for 5 restarts of quick and fine alignment), 
+the average runtime for the particle swarm  optimization is 100min 
+(for 5 restarts of quick and fine alignment). 
+PLEASE ADJUST THE NUMBER OF RESTARTS BELOW FOR A QUICKER RUNTIME.
+(Lowering the number of iterations inside the optimization algorithms or
+the particle swarm size is also possible but will yield considerable worse
+results.)
+%}
+% number of restarts
+numberOfrestarts = 5;
 %% --------------------------- INTRODUCTION ------------------------------
 %{
 A problem in facial surgery is the reconstruction of the lower jaw. Which, 
@@ -7,16 +21,10 @@ for example, was destroyed by tumors or an accident.
 To reconstruct the lower jaw, a piece of bone is removed from the pelvic 
 bone. In the following, the two algorithms Simulated Anneling and Particle 
 Swarm will be used to determine an optimal point for cutting out the 
-mandibular bone fragment. Based on the Hausdorff distance, a statement is 
+mandibular bone fragment. The similarity of the point set is based on the 
+calculation of the directed averaged Hausdorff distance. A statement is 
 made about the more suitable algorithm for this type of problem.
-The total runtime of the script is about ----- for 5 restarts for both
-algorithms. For a quicker runtime please adjust the number of restarts.
-ELAPSED TIME FOR SIMULATED ANNEALING: 1146.6573s 1595.607s (for 5 restarts)
-ELAPSED TIME FOR PARTICLE SWARM OPTIMIZATION: 5543.7614s (for 5 restarts)
 %}
-% number of restarts
-numberOfrestarts = 5;
-
 %% -------- SETUP: Load Data & Create and Visualize Point Clouds ---------
 %{
 For an initial overview of the data, we plot the two 3D point sets
@@ -52,17 +60,19 @@ hold off
 disp(['ELAPSED TIME FOR SETUP: ' num2str(toc) 's'])
 
 %% ------------------ OPTIMIZATION: SIMULATED ANNEALING ------------------
-% The first step is a quick alignment, the temperature is set to 50 and the
-% directed averaged hausdorff distance is calculated based on every 10th
-% point in both point sets. The quick alignment is followed by a fine
-% alignment, where we take the position of the mandible calculated in the
-% step before and only a small subsection of the pelvis where the mandible
-% is located now and run the algorithm again. The maximum step and rotation
-% is chosen significantly smaller than before, allowing the mandible to
-% move only slightly per cooling step. Since the calculation of the directed 
-% averaged hausdorff distance is still very computational expensive we
-% based the calculation on every second point in both point sets to achieve
-% a better runtime. 
+%{ 
+The first step is a quick alignment, the temperature is set to 50 and the
+directed averaged hausdorff distance is calculated based on every 10th
+point in both point sets. The quick alignment is followed by a fine
+alignment, where we take the position of the mandible calculated in the
+step before and only a small subsection of the pelvis where the mandible
+is located now and run the algorithm again. The maximum step and rotation
+is chosen significantly smaller than before, allowing the mandible to
+move only slightly per cooling step. Since the calculation of the directed 
+averaged hausdorff distance is still very computational expensive we
+based the calculation on every second point in both point sets to achieve
+a better runtime. 
+%} 
 
 tic
 % Quick Alignment Parameters
@@ -72,7 +82,8 @@ maxStep_Q = 5;               % maximum translation step
 maxRotation_Q = pi;          % maximum rotation 
 acceptance_constant_Q = 80;  % determines the probability of accepting a
                              % suboptimal solution - for the quick
-                             % alignment we want a higher probability, to escape local minima 
+                             % alignment we want a higher probability, 
+                             % to escape local minima 
 dahd_step_Q = 10;            % stepsize for the hausdorff distance
 
 % Fine Alignment Parameters
@@ -97,7 +108,7 @@ MandFine_SA = repmat(mandible, numberOfrestarts,1);
 
 for i = 1:numberOfrestarts
     disp(['SA: restart ' num2str(i)])
-    [mand_quick_SA, distances_quick_SA] = SimulatedAnnelingOpti(mand,pelvis,...
+    [mand_quick_SA, distances_quick_SA] = SimulatedAnnealingOpti(mand,pelvis,...
         startT_Q, nInnerLoop_Q, maxStep_Q,maxRotation_Q,...
         acceptance_constant_Q,dahd_step_Q);
 
@@ -141,7 +152,7 @@ for i = 1:numberOfrestarts
     
     % run the simulated annealing algorithm for the new mandible point set
     % whe obtained by the quick alignment and on the subsection of the pelvis
-    [mand_fine_SA, distances_fine_SA] = SimulatedAnnelingOpti(mand_quick_SA,...
+    [mand_fine_SA, distances_fine_SA] = SimulatedAnnealingOpti(mand_quick_SA,...
         pelvis_small,startT_F,nInnerLoop_F,maxStep_F,maxRotation_F,...
         acceptance_constant_F,dahd_step_F);
 
@@ -281,7 +292,31 @@ for i=1:numberOfrestarts
 end
 hold off
 disp(['ELAPSED TIME FOR PARTICLE SWARM OPTIMIZATION: ' num2str(toc) 's (for ' num2str(numberOfrestarts) ' restarts)'])
-%% ------------------------------ FUNCTIONS ------------------------------
+
+%% ----------------------------- CONCLUSION ------------------------------
+%{
+The simulated annealing algorithm runs considerably faster and produces 
+point sets with distances that are very close to the one produced by PSO. 
+Since it accepts suboptimal results with a higher probability
+when the temperature is still high it can escape local optima and might find
+the global one. In this example the algorithm has an optimum for the
+mandible point set if we align it with the spine. Since this is not very
+practical for the real world application we would have to adjust the
+input point cloud for the pelvis and exclude the spine. 
+While the running time of the particle swarm optimization does take a lot
+longer it yields some interesting results. Every particle can 
+'communicate' with all the other particles of the swarm, hence it is more 
+likely to get stuck in a local optimum which can be intersting for the
+quick alignment. 
+One of the challenges for both algorithms lies in the definition and
+calculation of the similarity function. The averaged directed hasudorff
+distance seems to be not the best choice, since it computational expensive
+when calculated for every point and does not yield good results when 
+calculated for only a subsection of the points.
+This was also an obstacle for parameter tuning since we wanted to get
+reasonable results while still keeping the runtime as short as possible. 
+%}
+%% ----------------------------- FUNCTIONS -------------------------------
 
 function [X] = move(X,Y)
 % moves the first point set X to the center of gravity of the second point set
@@ -415,7 +450,7 @@ end
 dahd = sum(dXY_all)/(dimX(1)/step);
 end
 
-function [ObjectMoveNew, BestDistances] = SimulatedAnnelingOpti(ObjectMove,ObjectFixed,...
+function [ObjectMoveNew, BestDistances] = SimulatedAnnealingOpti(ObjectMove,ObjectFixed,...
     startT,nInnerLoop,maxStep,maxRotation, acceptance_constant, dahd_step)
 % Function for a the simulated annealing optimization for registration of 
 % two 3D point clouds - find the best transformation of ObjectMove which
