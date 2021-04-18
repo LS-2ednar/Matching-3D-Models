@@ -29,38 +29,6 @@ title('The inital position of the mandible and pelvis')
 hold off
 
 %% ------------------ OPTIMIZATION: SIMULATED ANNEALING ------------------
-% Quick Alignment Parameters
-% Calculate boundaries for the solution space
-x_max_Q = max(pelvis(:,1));
-x_min_Q = min(pelvis(:,1));
-y_max_Q = max(pelvis(:,2));
-y_min_Q = min(pelvis(:,2));
-z_max_Q = max(pelvis(:,3));
-z_min_Q = min(pelvis(:,3));
-%inital transformation parameters
-alpha_Q = 0;
-beta_Q = 0;
-gamma_Q = 0;
-xt_Q = 0;
-yt_Q = 0;
-zt_Q = 0;
-%remaining parameters
-startT_Q = 50;
-maxStep_Q = 1;
-maxRotation_Q = 1;
-dahd_step_Q = 50;
-
-% number of restarts
-numberOfrestarts = 5;
-% for i = 1:numberOfrestarts
-[mandQuick_SA, distances_Q] = SimulatedAnnelingOpti(mand,pelvis,...
-    x_max_Q,x_min_Q,y_max_Q,y_min_Q,z_max_Q,z_min_Q,...
-    alpha_Q,beta_Q,gamma_Q,xt_Q,yt_Q,zt_Q,...
-    startT_Q,maxStep_Q,maxRotation_Q,dahd_step_Q);
-% end
-% Fine Alignment Parameters
-
-
 
 %% -------------------- OPTIMIZATION: PARTICLE SWARM ---------------------
 % Quick Alignment Parameters
@@ -69,7 +37,7 @@ MaxRot_Q = 2*pi;         % maximum value for rotation parameters
 MinTrans_Q = -100;       % minimum value for translation parameters
 MaxTrans_Q = 100;        % maximum value for translation parameters
 iter_Q = 50;             % number of iterations
-nPop_Q = 20;             % Population Size (Swarm Size)
+nPop_Q = 10;             % Population Size (Swarm Size)
 wdamp_Q = 0.98;          % damping coefficient
 c1_Q = 1.5;              % personal acceleration coefficent
 c2_Q = 1.5;              % social acceleration coefficient
@@ -77,11 +45,11 @@ stepsize_Q = 10;         % stepsize for the hausdorff distance
 
 % Fine Alignment Parameters
 MinRot_F = 0;            % minimum value for rotation parameters 
-MaxRot_F = 0;            % maximum value for rotation parameters
+MaxRot_F = 2*pi;         % maximum value for rotation parameters
 MinTrans_F = -10;        % minimum value for translation parameters
 MaxTrans_F = 10;         % maximum value for translation parameters
-iter_F = 10;             % number of iterations
-nPop_F = 20;             % Population Size (Swarm Size)
+iter_F = 50;             % number of iterations
+nPop_F = 10;             % Population Size (Swarm Size)
 wdamp_F = 0.98;          % damping coefficient
 c1_F = 1.1;              % personal acceleration coefficent
 c2_F = 1.1;              % social acceleration coefficient
@@ -122,12 +90,12 @@ for i=1:5
     drawnow
    
     % fine alignment 
-    xmin = min(mand_quick(:,1))-10;
-    xmax = max(mand_quick(:,1))+10;
-    ymin = min(mand_quick(:,2))-10;
-    ymax = max(mand_quick(:,2))+10;
-    zmin = min(mand_quick(:,3))-10;
-    zmax = max(mand_quick(:,3))+10;
+    xmin = min(mand_quick(:,1))-20;
+    xmax = max(mand_quick(:,1))+20;
+    ymin = min(mand_quick(:,2))-20;
+    ymax = max(mand_quick(:,2))+20;
+    zmin = min(mand_quick(:,3))-20;
+    zmax = max(mand_quick(:,3))+20;
     
     pelvis_small = pelvis(pelvis(:,1) > xmin & pelvis(:,1) < xmax & ...
         pelvis(:,2) > ymin & pelvis(:,2) < ymax & ...
@@ -290,119 +258,6 @@ for i=1:step:dimX(1)
 end
 % average the distance over all points
 dahd = sum(dXY_all)/(dimX(1)/step);
-end
-
-
-
-function [ObjectMoveNew, bestPosition] = SimulatedAnnelingOpti(ObjectMove,ObjectFixed,...
-    x_min,x_max,y_min,y_max,z_min,z_max,alpha,beta,gamma,xt,yt,zt,startT,maxStep,maxRotation,dahd_step)
-% Simulated Annealing algorithm
-
-% INPUT:
-% ObjectMove:                       object which is moved though the soultion space
-% ObjectFixed:                      object which we want ObjectMove to align to
-% x_min:                            minimal x value of solution space
-% x_max:                            maximal x value of solution space
-% y_min:                            minimal y value of solution space
-% y_max:                            maximal y value of solution space
-% z_min:                            minimal z value of solution space
-% z_max:                            maximal z value of solution space
-% alpha:                            initial rotation in x-axis
-% beta:                             initial rotation in y-axis
-% gamma:                            initial rotation in z-axis
-% xt:                               initial translation along x-axis
-% yt:                               initial translation along y-axis
-% zt:                               initial translation along z-axis
-% startT:                           inital temperatur
-% maxStep:                          maximal step size
-% maxRotation:                      maximal rotation 
-% dahd_step:                        directed avarage housdorff skiped units
-
-% OUTPUT:
-% ObjectMoveNew:                    the moved 3D point cloud
-% BestPosition.Transformation:      parameters for Transformation
-% BestPosition.Distance:            parameters for Distance
-% BestPosition.min:                 index of minimal distance
-
-
-% Initialize paramters Rotation matrix to unit matrix and translation vector 
-% to zero vector
-parameters_best = [alpha, beta, gamma, xt, yt, zt];
-parameters_current = parameters_best;
-
-% Use hausdorff distance of the inital positions as initial best value
-distance_best = directed_averaged_hausdorff_distance(ObjectMove, ObjectFixed, dahd_step);
-
-% Set starting temperature for the outer loop, the max stepsize and the max
-% rotation
-bestPosition.Transformation = zeros(startT,6) ;
-bestPosition.Distance = ones(startT,1)*inf;
-fprintf('Find Solutions\n')
-fprintf(['Max T:',num2str(startT),'\n'])
-    for T=startT:-1:1
-    fprintf(['Current T:',num2str(T),'\n'])
-        for v=1:5
-            % randomly update parameters for rotation
-            parameters_current(1) = parameters_best(1) + (rand-0.5)*2*maxRotation*T/startT;
-            parameters_current(2) = parameters_best(2) + (rand-0.5)*2*maxRotation*T/startT;
-            parameters_current(3) = parameters_best(3) + (rand-0.5)*2*maxRotation*T/startT;
-
-            % randomly update parameters for translation
-            parameters_current(4) = parameters_best(4) + (rand-0.5)*2*maxStep*T/startT;
-            parameters_current(5) = parameters_best(5) + (rand-0.5)*2*maxStep*T/startT;
-            parameters_current(6) = parameters_best(6) + (rand-0.5)*2*maxStep*T/startT;
-
-            % transform the mand matrix
-            mand_current = transformation(parameters_current, ObjectMove);
-
-            % update the parameters as long as we are not in the solution space
-            % or are already in the rejected parameters
-            while (max(mand_current(:,1)) > x_max+10 || min(mand_current(:,1)) < x_min-10 || ...
-                   max(mand_current(:,2)) > y_max+10 || min(mand_current(:,2)) < y_min-10 || ...
-                   max(mand_current(:,3)) > z_max+10 || min(mand_current(:,3)) < z_min-10)
-               
-            % randomly update parameters for rotation
-            parameters_current(1) = parameters_best(1) + (rand-0.5)*2*maxRotation*T/startT;
-            parameters_current(2) = parameters_best(2) + (rand-0.5)*2*maxRotation*T/startT;
-            parameters_current(3) = parameters_best(3) + (rand-0.5)*2*maxRotation*T/startT;
-
-            % randomly update parameters for translation
-            parameters_current(4) = parameters_best(4) + (rand-0.5)*2*maxStep*T/startT;
-            parameters_current(5) = parameters_best(5) + (rand-0.5)*2*maxStep*T/startT;
-            parameters_current(6) = parameters_best(6) + (rand-0.5)*2*maxStep*T/startT;
-
-            % transform the mand matrix
-            mand_current = transformation(parameters_current, ObjectMove);
-
-            % check if parameters were already rejected 
-            %tf = ismember(parameters_current, rejected, 'rows');
-            end
-
-            % calculated the (modified) hausdorff distance for the transformed
-            % mand matrix 
-            distance_current = directed_averaged_hausdorff_distance(mand_current, ObjectFixed,dahd_step);
-            difference = distance_current - distance_best;
-
-            % if the new distance is smaller than the last distance accept the
-            % solution
-            if difference < 0
-                parameters_best = parameters_current;
-                distance_best = distance_current;
-
-            % else if the new distance is not smaller than the last distance
-            % accept the solution with a random probability
-            elseif (exp((-difference*300)/T) > rand)
-                parameters_best = parameters_current;
-                distance_best = distance_current;
-            end
-        end
-    bestPosition.Transformation(T) =  parameters_best;
-    bestPosition.Distance(T) = distance_best;    
-    end
-   
-minimum_distance = min(min(bestPosition.Distance));
-bestPosition.min = find(bestPosition.Distance == minimum_distance);
-ObjectMoveNew = transformation(bestPostion.Transformation(bestPosition.min), ObjectMove);
 end
 
 
