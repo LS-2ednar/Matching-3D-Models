@@ -1,20 +1,34 @@
-%% -------- SETUP: Load Data & Create and Visualize Point Clouds ---------
 clear;clc;close all;
+rng(128);
+%% --------------------------- INTRODUCTION ------------------------------
+%{
+The total runtime of the script is about ----- for 5 restarts for both
+algorithms. For a quicker runtime please adjust the number of restarts.
+ELAPSED TIME FOR SIMULATED ANNEALING: 1146.6573s (for 5 restarts)
+ELAPSED TIME FOR PARTICLE SWARM OPTIMIZATION: 5543.7614s (for 5 restarts)
+%}
+% number of restarts
+numberOfrestarts = 5;
+
+%% -------- SETUP: Load Data & Create and Visualize Point Clouds ---------
+%{
+For an initial overview of the data, we plot the two 3D point sets
+To get a better starting point for the initialization the mandible point 
+sets center of gravity is moved to the center of gravity of the pelvis point set
+%} 
 tic
-% reading stl files
+% reading in the stl files
 stlData = stlread('Mand-left-cut.stl');
 mand = stlData.Points;
 stlData1 = stlread('Pelvis-left-cut.stl');
 pelvis = stlData1.Points;
-
 % Initial overview 3D plots of both stl objects 
-figure(1),
-plot3(mand(:,1),mand(:,2),mand(:,3),'.');
-title('Initial Point Cloud: Mandible')
-
-figure(2),
-plot3(pelvis(:,1),pelvis(:,2),pelvis(:,3),'.');
-title('Inital Point Cloud: Pelvis')
+% figure(1),
+% plot3(mand(:,1),mand(:,2),mand(:,3),'.');
+% title('Initial Point Cloud: Mandible')
+% figure(2),
+% plot3(pelvis(:,1),pelvis(:,2),pelvis(:,3),'.');
+% title('Inital Point Cloud: Pelvis')
 
 % updating mand position, the mand point cloud is moved to the center of
 % gravity of the pelvis point cloud
@@ -27,35 +41,57 @@ hold on
 plot3(pelvis(:,1),pelvis(:,2),pelvis(:,3),'k.');
 title('The inital position of the mandible and pelvis')
 hold off
+disp(['ELAPSED TIME FOR SETUP: ' num2str(toc) 's'])
 
 %% ------------------ OPTIMIZATION: SIMULATED ANNEALING ------------------
+% The first step is a quick alignment, the temperature is set to 50 and the
+% directed averaged hausdorff distance is calculated based on every 10th
+% point in both point sets. The quick alignment is followed by a fine
+% alignment, where we take the position of the mandible calculated in the
+% step before and only a small subsection of the pelvis where the mandible
+% is located now and run the algorithm again. The maximum step and rotation
+% is chosen significantly smaller than before, allowing the mandible to
+% move only slightly per cooling step. Since the calculation of the directed 
+% averaged hausdorff distance is still very computational expensive we
+% based the calculation on every second point in both point sets to achieve
+% a better runtime. 
+
+tic
 % Quick Alignment Parameters
-startT_Q = 50;
-maxStep_Q = 1;
-maxRotation_Q = 1;
-dahd_step_Q = 50;
+startT_Q = 50;               % start temperature for the outside loop 
+nInnerLoop_Q = 5;            % iterations for inner loop
+maxStep_Q = 5;               % maximum translation step
+maxRotation_Q = pi;          % maximum rotation 
+acceptance_constant_Q = 80;  % determines the probability of accepting a
+                             % suboptimal solution - for the quick
+                             % alignment we want a higher probability, to escape local minima 
+dahd_step_Q = 10;            % stepsize for the hausdorff distance
 
 % Fine Alignment Parameters
-startT_F = 10;
-maxStep_F = 0.1;
-maxRotation_F = 0.1;
-dahd_step_F = 2;
+startT_F = 20;               % start temperature for the outside loop 
+nInnerLoop_F = 5;            % iterations for inner loop
+maxStep_F = 0.1;             % maximum translation step
+maxRotation_F = 0.1*pi;      % maximum rotation
+acceptance_constant_F = 200; % determines the probability of accepting a
+                             % suboptimal solution - for the fine tuning
+                             % we want a smaller probability!
+dahd_step_F = 2;             % stepsize for the hausdorff distance
 
-% number of restarts
-numberOfrestarts = 5;
-
+% initialize the mandible structure to save the results for each restart
 mandible.Points = mand;
 mandible.Distance = inf;
 
 % save the best mand and its distance of the quick alignment for each restart 
 MandQuick_SA = repmat(mandible, numberOfrestarts,1); 
+
 % save the best mand and its distance of the fine alignment for each restart 
 MandFine_SA = repmat(mandible, numberOfrestarts,1); 
 
 for i = 1:numberOfrestarts
-    
+    disp(['SA: restart ' num2str(i)])
     [mand_quick_SA, distances_quick_SA] = SimulatedAnnelingOpti(mand,pelvis,...
-        startT_Q,maxStep_Q,maxRotation_Q,dahd_step_Q);
+        startT_Q, nInnerLoop_Q, maxStep_Q,maxRotation_Q,...
+        acceptance_constant_Q,dahd_step_Q);
 
     MandQuick_SA(i).Points = mand_quick_SA;
     MandQuick_SA(i).Distance = min(distances_quick_SA);
@@ -79,19 +115,27 @@ for i = 1:numberOfrestarts
     % fine alignment 
     % subset the pelvis point set, to a small environment of the quick
     % solution for a quicker calculation of the hausdorff distance
-    xmin = min(mand_quick_SA(:,1))-10;
-    xmax = max(mand_quick_SA(:,1))+10;
-    ymin = min(mand_quick_SA(:,2))-10;
-    ymax = max(mand_quick_SA(:,2))+10;
-    zmin = min(mand_quick_SA(:,3))-10;
-    zmax = max(mand_quick_SA(:,3))+10;
+    
+    % since the mandible is not fully aligned with the pelvis point set,
+    % we need to give the mandible more room to move in the subsection of
+    % the pelvis
+    correction_constant = 10; 
+    xmin = min(mand_quick_SA(:,1))-correction_constant;
+    xmax = max(mand_quick_SA(:,1))+correction_constant;
+    ymin = min(mand_quick_SA(:,2))-correction_constant;
+    ymax = max(mand_quick_SA(:,2))+correction_constant;
+    zmin = min(mand_quick_SA(:,3))-correction_constant;
+    zmax = max(mand_quick_SA(:,3))+correction_constant;
     
     pelvis_small = pelvis(pelvis(:,1) > xmin & pelvis(:,1) < xmax & ...
         pelvis(:,2) > ymin & pelvis(:,2) < ymax & ...
         pelvis(:,3) > zmin & pelvis(:,3) < zmax, :);
     
-    [mand_fine_SA, distances_fine_SA] = SimulatedAnnelingOpti(mand_quick_SA,pelvis_small,...
-        startT_F,maxStep_F,maxRotation_F,dahd_step_F);
+    % run the simulated annealing algorithm for the new mandible point set
+    % whe obtained by the quick alignment and on the subsection of the pelvis
+    [mand_fine_SA, distances_fine_SA] = SimulatedAnnelingOpti(mand_quick_SA,...
+        pelvis_small,startT_F,nInnerLoop_F,maxStep_F,maxRotation_F,...
+        acceptance_constant_F,dahd_step_F);
 
     MandFine_SA(i).Points = mand_fine_SA;
     MandFine_SA(i).Distance = min(distances_fine_SA);
@@ -115,8 +159,19 @@ for i = 1:numberOfrestarts
 end
 hold off
 
+disp(['ELAPSED TIME FOR SIMULATED ANNEALING: ' num2str(toc) 's (for ' num2str(numberOfrestarts) ' restarts)'])
 
 %% -------------------- OPTIMIZATION: PARTICLE SWARM ---------------------
+%{
+We again chose to do the alignment in two steps, to make the two algorithms
+comparable we chose the same steps size for the calculation directed averaged 
+hausdorff distance. The calculation is based on on every 10th point for the
+quick alignment and and on every 2nd point for the fine alignment. 
+The quick alignment has in total 50 iterations and a swarm size of 20 
+particles. The fine alignment has only 20 iterations and a swarm size of 10 
+particles, to safe some computation time.
+%}
+tic
 % Quick Alignment Parameters
 MinRot_Q = 0;            % minimum value for rotation parameters 
 MaxRot_Q = 2*pi;         % maximum value for rotation parameters
@@ -131,17 +186,15 @@ stepsize_Q = 10;         % stepsize for the hausdorff distance
 
 % Fine Alignment Parameters
 MinRot_F = 0;            % minimum value for rotation parameters 
-MaxRot_F = 0;            % maximum value for rotation parameters
+MaxRot_F = 2*pi;         % maximum value for rotation parameters
 MinTrans_F = -10;        % minimum value for translation parameters
 MaxTrans_F = 10;         % maximum value for translation parameters
-iter_F = 10;             % number of iterations
-nPop_F = 20;             % Population Size (Swarm Size)
-wdamp_F = 0.98;          % damping coefficient
+iter_F = 20;             % number of iterations
+nPop_F = 10;             % Population Size (Swarm Size)
+wdamp_F = 0.9;           % damping coefficient
 c1_F = 1.1;              % personal acceleration coefficent
 c2_F = 1.1;              % social acceleration coefficient
 stepsize_F = 2;          % stepsize for the hausdorff distance
-
-restarts = 5;            % number of restarts
 
 mandible.Points = mand;
 mandible.Distance = inf;
@@ -151,8 +204,8 @@ MandQuick = repmat(mandible, restarts,1);
 % save the best mand and its distance of the fine alignment for each restart 
 MandFine = repmat(mandible, restarts,1);
 
-for i=1:5
-    
+for i=1:numberOfrestarts
+    disp(['PSO: restart ' num2str(i)])
     % quick alignment
     [mand_quick, distances_quick] = ParticleSwarmOpti(MinRot_Q, MaxRot_Q, MinTrans_Q, ...
         MaxTrans_Q, iter_Q, nPop_Q, wdamp_Q, c1_Q, c2_Q, mand, pelvis, stepsize_Q);
@@ -178,17 +231,23 @@ for i=1:5
     % fine alignment 
     % subset the pelvis point set, to a small environment of the quick
     % solution for a quicker calculation of the hausdorff distance
-    xmin = min(mand_quick(:,1))-10;
-    xmax = max(mand_quick(:,1))+10;
-    ymin = min(mand_quick(:,2))-10;
-    ymax = max(mand_quick(:,2))+10;
-    zmin = min(mand_quick(:,3))-10;
-    zmax = max(mand_quick(:,3))+10;
+    
+    % since the mandible is not fully aligned with the pelvis point set,
+    % we need to give the mandible more room to move 
+    correction_constant = 20;
+    xmin = min(mand_quick(:,1))-correction_constant;
+    xmax = max(mand_quick(:,1))+correction_constant;
+    ymin = min(mand_quick(:,2))-correction_constant;
+    ymax = max(mand_quick(:,2))+correction_constant;
+    zmin = min(mand_quick(:,3))-correction_constant;
+    zmax = max(mand_quick(:,3))+correction_constant;
     
     pelvis_small = pelvis(pelvis(:,1) > xmin & pelvis(:,1) < xmax & ...
         pelvis(:,2) > ymin & pelvis(:,2) < ymax & ...
         pelvis(:,3) > zmin & pelvis(:,3) < zmax, :);
     
+    % run the particle swarm algorithm for the new mandible point set,
+    % whe obtained by the quick alignment, and on the subsection of the pelvis
     [mand_fine, distances_fine] = ParticleSwarmOpti(MinRot_F, MaxRot_F, MinTrans_F, ...
         MaxTrans_F, iter_F, nPop_F, wdamp_F, c1_F, c2_F, mand_quick, pelvis_small, stepsize_F);
     
@@ -199,6 +258,7 @@ for i=1:5
     plot(distances_fine, 'Linewidth', 1);
     xlabel('Iteration')
     ylabel('Best Distance')
+    ylim([0 5])
     title('PSO: Best Distance per Iteration for Fine Alignment')
     hold on
     drawnow
@@ -212,7 +272,7 @@ for i=1:5
 
 end
 hold off
-toc
+disp(['ELAPSED TIME FOR PARTICLE SWARM OPTIMIZATION: ' num2str(toc) 's (for ' num2str(restarts) ' restarts)'])
 %% ------------------------------ FUNCTIONS ------------------------------
 
 function [X] = move(X,Y)
@@ -255,7 +315,7 @@ function [X_new] = transformation(parameters, X)
 % Transforms a 3D point set
 % INPUT:
 % parameters: a 1x6 vector with entries corresponding to the rotation and
-%             translation values
+%             translation parameters
 % X:          a 3D point set
 % OUTPUT:
 % X_new:      the transformed 3D point set
@@ -304,8 +364,11 @@ T = [r11, r12, r13, r14;...
     r31, r32, r33, r34;...
     r41, r42, r43, r44];
 
+% extend the point cloud with 
 extension = ones(length(X),1);
 X_ext = horzcat(X, extension);
+
+% transform the point cloud
 X_new_ext = T*X_ext';
 X_new = X_new_ext(1:3,:)';
 end
@@ -316,8 +379,8 @@ function [dahd] = directed_averaged_hausdorff_distance(X,Y, step)
 % point in Y, this can only happen if X <= Y.
 
 % INPUT:
-% X: a 3D point set
-% Y: a 3D point set 
+% X:    a 3D point set
+% Y:    a 3D point set 
 % OUTPUT:
 % dahd: the directed averaged hausdorff distance from X to Y
 
@@ -325,11 +388,7 @@ dimX = size(X);
 dimY = size(Y);
 %check if the two sets have the same dimension
 if dimX(2) ~= dimY(2)
-    fprintf('All points must have the same dimension')
-end
-
-if dimX(1) > dimY(1)
-    fprint('The first input point set is larger than the second one - hausdorff distance cannot reach zero')
+    disp('All points must have the same dimension')
 end
 
 %calculate the directed distance from X to Y
@@ -348,29 +407,31 @@ end
 dahd = sum(dXY_all)/(dimX(1)/step);
 end
 
-
-
 function [ObjectMoveNew, BestDistances] = SimulatedAnnelingOpti(ObjectMove,ObjectFixed,...
-    startT,maxStep,maxRotation,dahd_step)
-% Simulated Annealing algorithm
+    startT,nInnerLoop,maxStep,maxRotation, acceptance_constant, dahd_step)
+% Function for a the simulated annealing optimization for registration of 
+% two 3D point clouds - find the best transformation of ObjectMove which
+% minimized the directed average hausdorff distance to ObjectFixed
 
 % INPUT:
-% ObjectMove:                       object which is moved though the soultion space
-% ObjectFixed:                      object which we want ObjectMove to align to
-% startT:                           inital temperatur
-% maxStep:                          maximal step size
-% maxRotation:                      maximal rotation 
-% dahd_step:                        directed avarage housdorff skiped units
+% ObjectMove:           object which is moved though the soultion space
+% ObjectFixed:          object which we want ObjectMove to align to
+% startT:               inital temperatur
+% nInnerLoop:           number of iterations through the inner loop
+% maxStep:              maximal step size
+% maxRotation:          maximal rotation 
+% acceptance_constant:  determines the probability to accept suboptimal solutions 
+% dahd_step:            directed avarage housdorff skiped units
 
 % OUTPUT:
-% ObjectMoveNew:                    the moved 3D point cloud
-% BestDistances:                    the best distance for each Temperature
+% ObjectMoveNew:        the moved 3D point cloud
+% BestDistances:        the best distance for each Temperature
 
 
-
+% INITIALIZATION
 % Initialize paramters Rotation matrix to unit matrix and translation vector 
 % to zero vector
-%inital transformation parameters
+% inital transformation parameters
 alpha = 0;
 beta = 0;
 gamma = 0;
@@ -384,20 +445,28 @@ parameters_current = parameters_best;
 distance_best = directed_averaged_hausdorff_distance(ObjectMove, ObjectFixed, dahd_step);
 
 % Calculate boundaries for the solution space
-x_max = max(ObjectFixed(:,1));
-x_min = min(ObjectFixed(:,1));
-y_max = max(ObjectFixed(:,2));
-y_min = min(ObjectFixed(:,2));
-z_max = max(ObjectFixed(:,3));
-z_min = min(ObjectFixed(:,3));
+% the solution space is a cuboid around the pelvis point set, where each
+% point of the point set has at least a distance of 5 points to the
+% boarder of the cuboid. This allows the mandible to have at least an
+% offset of 5 points from each point of the pelvis point cloud.
+
+offset_constant = 5;
+x_max = max(ObjectFixed(:,1))+offset_constant;
+x_min = min(ObjectFixed(:,1))-offset_constant;
+y_max = max(ObjectFixed(:,2))+offset_constant;
+y_min = min(ObjectFixed(:,2))-offset_constant;
+z_max = max(ObjectFixed(:,3))+offset_constant;
+z_min = min(ObjectFixed(:,3))-offset_constant;
 
 BestDistances = zeros(startT, 1);
 
-fprintf('Find Solutions\n')
+% OPTIMIZATION
 fprintf(['Max T:',num2str(startT),'\n'])
     for T=startT:-1:1
-        for v=1:5
+        for v=1:nInnerLoop
             % randomly update parameters for rotation
+            % dynamic stepsize: the change of parameter becomes potentially
+            % smaller when the temperature cools down
             parameters_current(1) = parameters_best(1) + (rand-0.5)*2*maxRotation*T/startT;
             parameters_current(2) = parameters_best(2) + (rand-0.5)*2*maxRotation*T/startT;
             parameters_current(3) = parameters_best(3) + (rand-0.5)*2*maxRotation*T/startT;
@@ -407,27 +476,26 @@ fprintf(['Max T:',num2str(startT),'\n'])
             parameters_current(5) = parameters_best(5) + (rand-0.5)*2*maxStep*T/startT;
             parameters_current(6) = parameters_best(6) + (rand-0.5)*2*maxStep*T/startT;
 
-            % transform the mand matrix
+            % transform the mandibe point set
             mand_current = transformation(parameters_current, ObjectMove);
 
             % update the parameters as long as we are not in the solution space
-            % or are already in the rejected parameters
-            while (max(mand_current(:,1)) > x_max+10 || min(mand_current(:,1)) < x_min-10 || ...
-                   max(mand_current(:,2)) > y_max+10 || min(mand_current(:,2)) < y_min-10 || ...
-                   max(mand_current(:,3)) > z_max+10 || min(mand_current(:,3)) < z_min-10)
+            while (max(mand_current(:,1)) > x_max || min(mand_current(:,1)) < x_min || ...
+                   max(mand_current(:,2)) > y_max || min(mand_current(:,2)) < y_min || ...
+                   max(mand_current(:,3)) > z_max || min(mand_current(:,3)) < z_min)
                
-            % randomly update parameters for rotation
-            parameters_current(1) = parameters_best(1) + (rand-0.5)*2*maxRotation*T/startT;
-            parameters_current(2) = parameters_best(2) + (rand-0.5)*2*maxRotation*T/startT;
-            parameters_current(3) = parameters_best(3) + (rand-0.5)*2*maxRotation*T/startT;
+                % randomly update parameters for rotation
+                parameters_current(1) = parameters_best(1) + (rand-0.5)*2*maxRotation*T/startT;
+                parameters_current(2) = parameters_best(2) + (rand-0.5)*2*maxRotation*T/startT;
+                parameters_current(3) = parameters_best(3) + (rand-0.5)*2*maxRotation*T/startT;
 
-            % randomly update parameters for translation
-            parameters_current(4) = parameters_best(4) + (rand-0.5)*2*maxStep*T/startT;
-            parameters_current(5) = parameters_best(5) + (rand-0.5)*2*maxStep*T/startT;
-            parameters_current(6) = parameters_best(6) + (rand-0.5)*2*maxStep*T/startT;
+                % randomly update parameters for translation
+                parameters_current(4) = parameters_best(4) + (rand-0.5)*2*maxStep*T/startT;
+                parameters_current(5) = parameters_best(5) + (rand-0.5)*2*maxStep*T/startT;
+                parameters_current(6) = parameters_best(6) + (rand-0.5)*2*maxStep*T/startT;
 
-            % transform the mand matrix
-            mand_current = transformation(parameters_current, ObjectMove);
+                % transform the mand matrix
+                mand_current = transformation(parameters_current, ObjectMove);
             end
             % calculated the (modified) hausdorff distance for the transformed
             % mand matrix 
@@ -441,8 +509,8 @@ fprintf(['Max T:',num2str(startT),'\n'])
                 distance_best = distance_current;
 
             % else if the new distance is not smaller than the last distance
-            % accept the solution with a random probability
-            elseif (exp((-difference*300)/T) > rand)
+            % accept the solution with a random probability 
+            elseif (exp((-difference*acceptance_constant)/T) > rand)
                 parameters_best = parameters_current;
                 distance_best = distance_current;
             end
@@ -452,7 +520,6 @@ fprintf(['Max T:',num2str(startT),'\n'])
     end
     ObjectMoveNew = transformation(parameters_best, ObjectMove);
 end
-
 
 function [ObjectMoveNew, BestDistances] = ParticleSwarmOpti(MinRotation, MaxRotation,...
     MinTranslation, MaxTranslation, iter, nPopulation, wdamp, personalacceleration, socialacceleration, ObjectMove, ObjectFixed, stepsize)
@@ -485,9 +552,9 @@ ObjFunc = @(x) directed_averaged_hausdorff_distance(transformation(x, ObjectMove
 nParameters = 6;    % number of transformation parameters
 w = 1;              % Inertia coefficient
 
+% INITIALIZATION
 % initialize the transformation parameters to zero
 % and Velocity and Distance as empty arrays
-
 inital_particle.Transformation = zeros(1,nParameters);
 inital_particle.Velocity = [];
 inital_particle.Distance = [];
@@ -496,8 +563,7 @@ inital_particle.Best.Distance = [];
 
 particle = repmat(inital_particle, nPopulation,1); % initialize the whole population
 
-GlobalBest.Distance = inf;                       % initialize the worst case
-
+GlobalBest.Distance = inf;                         % initialize the worst case
 
 for i=1:nPopulation
     
@@ -511,8 +577,10 @@ for i=1:nPopulation
     % initialize the velocity to zero
     particle(i).Velocity = zeros([1 nParameters]);
     
+    % evaluate the objective function to get the distance
     particle(i).Distance = ObjFunc(particle(i).Transformation);
     
+    % set the 
     particle(i).Best.Transformation = particle(i).Transformation;
     particle(i).Best.Distance = particle(i).Distance;
     
@@ -525,8 +593,8 @@ end
 % hold best global distance value for each iteration
 BestDistances = zeros(iter, 1);
 
+% OPTIMIZATION
 for it=1:iter
-    
     for i=1:nPopulation
         % update velocity for each particle 
         particle(i).Velocity = w*particle(i).Velocity + ...
@@ -549,10 +617,15 @@ for it=1:iter
             GlobalBest = particle(i).Best;
         end
     end
+    
+    % safe the best distance for each iteration
     BestDistances(it) = GlobalBest.Distance;
+    
+    % update the inertia coefficient
     w = w*wdamp;
     disp(['Iteration ' num2str(it) ': Best Distance = ' num2str(BestDistances(it))]);
     
 end
+% return the transformed object
 ObjectMoveNew = transformation(GlobalBest.Transformation, ObjectMove);
 end
