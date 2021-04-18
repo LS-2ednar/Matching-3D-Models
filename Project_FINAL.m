@@ -14,7 +14,8 @@ numberOfrestarts = 5;
 %{
 For an initial overview of the data, we plot the two 3D point sets
 To get a better starting point for the initialization the mandible point 
-sets center of gravity is moved to the center of gravity of the pelvis point set
+sets center of gravity is moved to the center of gravity of the pelvis 
+point set
 %} 
 tic
 % reading in the stl files
@@ -200,9 +201,9 @@ mandible.Points = mand;
 mandible.Distance = inf;
 
 % save the best mand and its distance of the quick alignment for each restart 
-MandQuick = repmat(mandible, restarts,1); 
+MandQuick = repmat(mandible, numberOfrestarts,1); 
 % save the best mand and its distance of the fine alignment for each restart 
-MandFine = repmat(mandible, restarts,1);
+MandFine = repmat(mandible, numberOfrestarts,1);
 
 for i=1:numberOfrestarts
     disp(['PSO: restart ' num2str(i)])
@@ -272,7 +273,7 @@ for i=1:numberOfrestarts
 
 end
 hold off
-disp(['ELAPSED TIME FOR PARTICLE SWARM OPTIMIZATION: ' num2str(toc) 's (for ' num2str(restarts) ' restarts)'])
+disp(['ELAPSED TIME FOR PARTICLE SWARM OPTIMIZATION: ' num2str(toc) 's (for ' num2str(numberOfrestarts) ' restarts)'])
 %% ------------------------------ FUNCTIONS ------------------------------
 
 function [X] = move(X,Y)
