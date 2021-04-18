@@ -2,9 +2,16 @@ clear;clc;close all;
 rng(128);
 %% --------------------------- INTRODUCTION ------------------------------
 %{
+A problem in facial surgery is the reconstruction of the lower jaw. Which, 
+for example, was destroyed by tumors or an accident. 
+To reconstruct the lower jaw, a piece of bone is removed from the pelvic 
+bone. In the following, the two algorithms Simulated Anneling and Particle 
+Swarm will be used to determine an optimal point for cutting out the 
+mandibular bone fragment. Based on the Hausdorff distance, a statement is 
+made about the more suitable algorithm for this type of problem.
 The total runtime of the script is about ----- for 5 restarts for both
 algorithms. For a quicker runtime please adjust the number of restarts.
-ELAPSED TIME FOR SIMULATED ANNEALING: 1146.6573s (for 5 restarts)
+ELAPSED TIME FOR SIMULATED ANNEALING: 1146.6573s 1595.607s (for 5 restarts)
 ELAPSED TIME FOR PARTICLE SWARM OPTIMIZATION: 5543.7614s (for 5 restarts)
 %}
 % number of restarts
